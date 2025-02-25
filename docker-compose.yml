@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  nodejs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nodejs_app
+    container_name: nodejs_container  
+    restart: unless-stopped 
+    env_file: .env 
+    ports:
+      - "5000:5000" 
+    volumes:
+      - .:/home/node/app 
+      - node_modules:/home/node/app/node_modules  
+    command: yarn dev
+  
+  db:
+    image: mongo:latest
+    container_name: mongo_container
+    restart: unless-stopped 
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root  
+      MONGO_INITDB_ROOT_PASSWORD: root  
+      MONGO_INITDB_DATABASE: challenge  
+    volumes:
+      - dbdata:/data/db  
+
+volumes:
+  node_modules:
+  dbdata:
+
+networks:
+  default:
+    driver: bridge
