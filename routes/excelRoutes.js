@@ -5,6 +5,7 @@ const { getGfs } = require('../config/database');
 const mongoose = require('mongoose');
 const ExcelSchema = require('../models/Excel');
 const ValidDataSchema = require('../models/validData');
+const ErrorDataSchema = require('../models/Errors');
 const { processFile } = require('../services/excelService')
 
 router.post('/upload', upload.single('file'), async (req, res) => {
@@ -26,70 +27,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     }
 });
 
-router.get('/data/:fileId', async (req, res) => {
-    const { fileId } = req.params;
-    const { page = 1, limit = 10 } = req.query;
-
-    try {
-        const task = await ExcelSchema.findOne({ taskId: fileId });
-
-        if (!task) {
-            return res.status(404).json({ error: 'File not found' });
-        }
-
-        const processedData = await ValidDataSchema.find({ taskId: fileId })
-            .select('name age nums -_id')
-            .skip((page - 1) * limit)
-            .limit(limit);
-
-        const totalData = await ValidDataSchema.countDocuments({ taskId: fileId });
-
-        res.status(200).json({
-            taskId: task.taskId,
-            status: task.status,
-            totalData,
-            processedData,
-            currentPage: page,
-            totalPages: Math.ceil(totalData / limit),
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-
-router.get('/errors/:fileId', async (req, res) => {
-    const { fileId } = req.params;
-    const { page = 1, limit = 10 } = req.query;
-
-    try {
-        const task = await ExcelSchema.findOne({ taskId: fileId });
-
-        if (!task) {
-            return res.status(404).json({ error: 'File not found' });
-        }
-
-        const errors = task.errorsList;
-        const totalErrors = errors.length;
-        const paginatedErrors = errors.slice((page - 1) * limit, page * limit);
-
-        res.status(200).json({
-            taskId: task.taskId,
-            status: task.status,
-            totalErrors,
-            errors: paginatedErrors,
-            currentPage: page,
-            totalPages: Math.ceil(totalErrors / limit),
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-
+//devuelve toda la info del archivo
 router.get('/:fileId', async (req, res) => {
     const { fileId } = req.params;
-    const { page = 1, limit = 100 } = req.query;
+    const page = parseInt(req.query.page) || 1; 
+    const limit = parseInt(req.query.limit) || 100; 
 
     try {
         const task = await ExcelSchema.findOne({ taskId: fileId });
@@ -101,19 +43,23 @@ router.get('/:fileId', async (req, res) => {
         const lowerBound = limit * (page - 1);
         const upperBound = limit * page;
 
-        // Obtener solo las filas válidas dentro del rango
         const processedData = await ValidDataSchema.find({
             taskId: fileId,
-            row: { $gt: lowerBound, $lte: upperBound } // Filtrar por el rango de filas
+            row: { $gte: lowerBound + 1, $lt: upperBound + 1 }
         })
         .select('name age nums row -_id')
-        .sort({ row: 1 });
+        .sort({ row: 1 })
+        .limit(limit);
 
-        // Filtrar errores dentro del rango solicitado
-        const errors = task.errorsList
-            .filter(error => error.row > lowerBound && error.row <= upperBound)
-            .sort((a, b) => a.row - b.row);
+        const errors = await ErrorDataSchema.find({
+            taskId: fileId, 
+            row: { $gte: lowerBound + 1, $lt: upperBound + 1 }
+        })
+        .select('errorsList -_id') 
+        .sort({ row: 1 })
+        .limit(limit);
 
+        const mergedErrors = errors.flatMap(error => error.errorsList);
         const rows = task.totalRows
 
         res.status(200).json({
@@ -121,7 +67,7 @@ router.get('/:fileId', async (req, res) => {
             status: task.status,
             totalRows: rows,
             data: processedData,
-            errors: errors,
+            errors: mergedErrors,
             currentPage: page,
             totalPages: Math.ceil(rows / limit),
         });
@@ -130,9 +76,7 @@ router.get('/:fileId', async (req, res) => {
     }
 });
 
-
-
-
+//endpoint para chequear si se guardaban bien los archivos en gfs
 router.get('/', async (req, res) => {
     try {
         const gfs = getGfs();
@@ -145,5 +89,83 @@ router.get('/', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+//obtener la informacion valida de un archivo
+router.get('/data/:fileId', async (req, res) => {
+    const { fileId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100; 
+
+    try {
+        const task = await ExcelSchema.findOne({ taskId: fileId });
+
+        if (!task) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+
+        const lowerBound = limit * (page - 1);
+        const upperBound = limit * page;
+
+        const processedData = await ValidDataSchema.find({
+            taskId: fileId,
+            row: { $gte: lowerBound + 1, $lt: upperBound + 1 }
+        })
+        .select('name age nums row -_id')
+        .sort({ row: 1 })
+        .limit(limit);
+
+        const totalRows = task.totalRows;
+
+        res.status(200).json({
+            taskId: task.taskId,
+            status: task.status,
+            data: processedData,
+            currentPage: page,
+            totalPages: Math.ceil(totalRows / limit),
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// endpoint para obtener solo los errores
+router.get('/errors/:fileId', async (req, res) => {
+    const { fileId } = req.params;
+    const page = parseInt(req.query.page) || 1; 
+    const limit = parseInt(req.query.limit) || 100; 
+
+    try {
+        const task = await ExcelSchema.findOne({ taskId: fileId });
+
+        if (!task) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+
+        const lowerBound = limit * (page - 1);
+        const upperBound = limit * page;
+
+        const errors = await ErrorDataSchema.find({
+            taskId: fileId,
+            row: { $gte: lowerBound + 1, $lt: upperBound + 1 }
+        })
+        .select('errorsList -_id')
+        .sort({ row: 1 })
+        .limit(limit);
+
+        const mergedErrors = errors.flatMap(error => error.errorsList);
+        const totalErrors = await ErrorDataSchema.countDocuments({ taskId: fileId });
+
+        res.status(200).json({
+            taskId: task.taskId,
+            status: task.status,
+            errors: mergedErrors,
+            currentPage: page,
+            totalPages: Math.ceil(totalErrors / limit),
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 module.exports = router;

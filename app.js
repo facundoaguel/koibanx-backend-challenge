@@ -1,5 +1,6 @@
 const express = require('express');
 const {connectDB} = require('./config/database');
+const authenticate = require('./auth/authenticate')
 const excelRoutes = require('./routes/excelRoutes');
 require('dotenv').config();
 
@@ -8,7 +9,7 @@ app.use(express.json({limit: '100mb'}));
 
 connectDB();
 
-app.use('/files', excelRoutes);
+app.use('/files', authenticate, excelRoutes);
 
 app.get('/', (req, res) => {
     res.send('Home page')

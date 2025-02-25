@@ -1,29 +1,8 @@
-// const multer = require('multer');
 const path = require('path');
-// require('dotenv').config();
-// const { GridFsStorage } = require('multer-gridfs-storage');
+const multer = require('multer');
+const { GridFsStorage } = require('multer-gridfs-storage');
+require('dotenv').config();
 
-// // Configuración del almacenamiento de GridFS
-// const storage = new GridFsStorage({
-//     url: process.env.MONGO_URI,
-//     options: { useUnifiedTopology: true }, // Asegúrate de incluir esta opción
-//     file: (req, file) => {
-//         return new Promise((resolve, reject) => {
-//             const filename = file.originalname;
-
-//             // Verificar el tipo de archivo antes de guardarlo
-//             const fileInfo = {
-//                 filename: filename,
-//                 bucketName: 'uploads', // El nombre del bucket en GridFS
-//             };
-
-//             // Resuelve el archivo
-//             resolve(fileInfo);
-//         });
-//     },
-// });
-
-// // Filtro para aceptar solo archivos Excel
 const fileFilter = (req, file, cb) => {
     const allowedMimeTypes = [
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
@@ -41,27 +20,18 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-// // Crear el middleware de multer
-// const upload = multer({ storage, fileFilter });
-
-// module.exports = upload;
-const multer = require('multer');
-const { GridFsStorage } = require('multer-gridfs-storage');
-require('dotenv').config();
-
-// Configuración del almacenamiento de GridFS
+//usamos GridFS para poder almacenar archivos grandes en mongo, en esquemas normales el max es 16mb
 const storage = new GridFsStorage({
     url: process.env.MONGO_URI,
     options: { useUnifiedTopology: true },
     file: (req, file) => {
         return {
             filename: file.originalname,
-            bucketName: 'uploads', // El nombre del bucket en GridFS
+            bucketName: 'uploads', //bucket GridFS
         };
     },
 });
 
-// Crear el middleware de multer
 const upload = multer({ storage, fileFilter });
 
 module.exports = upload;

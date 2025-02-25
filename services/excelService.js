@@ -1,6 +1,7 @@
 const XLSX = require('xlsx');
 const ExcelSchema = require('../models/Excel')
 const ValidDataSchema = require('../models/validData');
+const ErrorDataSchema = require('../models/Errors');
 let { getGfs } = require('../config/database')
 
 const excelToJson = (filePath) => {
@@ -37,81 +38,95 @@ const validateRow = (row, rowIndex) => {
 
 
 const processFile = async (taskId, fileId) => {
-        const gfs = getGfs();
-        const readStream = gfs.createReadStream({ _id: fileId });
-        let buffer = Buffer.from([]);
-    
-        return new Promise((resolve, reject) => {
-            readStream.on('data', (chunk) => {
-                buffer = Buffer.concat([buffer, chunk]);
-            });
-    
-            readStream.on('end', async () => {
-                try {
-                    const workbook = XLSX.read(buffer, { type: 'buffer' });
-                    const errors = [];
-                    const validData = [];
-                    let totalRows = 1;
+    const gfs = getGfs();
+    const readStream = gfs.createReadStream({ _id: fileId });
 
-                    for (const sheetName of workbook.SheetNames) {
-                        const worksheet = workbook.Sheets[sheetName];
-                        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    let totalRows = 1; //arranca en 1 por la cabecera
+    let batchErrors = [];
+    let batchValidData = [];
 
-                        await Promise.all(
-                            rows.slice(1).map(async (row, index) => {
-                                const rowIndex = index + 2; // Adjust for header row
-                                const { hasError, errors: rowErrors } = validateRow(row, rowIndex);
-    
-                                if (hasError) {
-                                    errors.push(...rowErrors);
-                                } else {
-                                    const numsArray = row[2]
-                                        .split(',')
-                                        .map(num => parseInt(num, 10))
-                                        .filter(n => !isNaN(n))
-                                        .sort();
-                                        validData.push({
-                                            taskId,
-                                            row: rowIndex,
-                                            name: row[0],   
-                                            age: row[1],    
-                                            nums: numsArray  
-                                        });
-                                }
-                                totalRows++;
-                            })
-                        );
-                    }
-    
-                    if (validData.length > 0){
-                        await ValidDataSchema.insertMany(validData);
-                    }
-                    await ExcelSchema.findOneAndUpdate(
-                        { taskId },
-                        { 
-                            $set: { 
-                                status: 'done', 
-                                errorsList: errors,
-                                totalRows: totalRows // Asegúrate de incluir el total de filas aquí
-                            }
-                        }
-                    );
-    
-                    resolve();
-                } catch (err) {
-                    reject(err);
-                }
-            });
-    
-            readStream.on('error', (err) => {
-                reject(err);
-            });
+    console.log(`Processing file ${taskId}`)
+
+    await ExcelSchema.findOneAndUpdate(
+        { taskId },
+        { 
+            $set: { 
+                status: 'processing', 
+            }
+        }
+    );
+
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        
+        readStream.on('data', (chunk) => {
+            chunks.push(chunk);
         });
+
+        readStream.on('end', async () => {
+            try {
+                const buffer = Buffer.concat(chunks);
+                const workbook = XLSX.read(buffer, { type: 'buffer' });
+
+                for (const sheetName of workbook.SheetNames) {
+                    const worksheet = workbook.Sheets[sheetName];
+                    
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+                    
+                    for (let index = 1; index < rows.length; index++) {
+                        const row = rows[index];
+                        const rowIndex = index + 1;
+
+                        if (row.every(cell => cell === "")) continue;
+
+                        const { hasError, errors: rowErrors } = validateRow(row, rowIndex);
+
+                        if (hasError) {
+                            batchErrors.push({ taskId, row: rowIndex, errorsList: rowErrors });
+                        } else {
+                            batchValidData.push({
+                                taskId,
+                                row: rowIndex,
+                                name: row[0]?.toString().trim(),
+                                age: parseInt(row[1], 10),
+                                nums: row[2].split(',').map(num => parseInt(num.trim(), 10)).filter(n => !isNaN(n)).sort()
+                            });
+                        }
+
+                        totalRows++;
+                        if (batchErrors.length >= 1000) {
+                            await ErrorDataSchema.insertMany(batchErrors);
+                            batchErrors = [];
+                        }
+                        if (batchValidData.length >= 1000) {
+                            await ValidDataSchema.insertMany(batchValidData);
+                            batchValidData = [];
+                        }
+                    }
+                }
+                if (batchErrors.length > 0) await ErrorDataSchema.insertMany(batchErrors);
+                if (batchValidData.length > 0) await ValidDataSchema.insertMany(batchValidData);
+
+                await ExcelSchema.findOneAndUpdate(
+                    { taskId },
+                    { 
+                        $set: { 
+                            status: 'done', 
+                            totalRows 
+                        }
+                    }
+                );
+
+                resolve();
+            } catch (err) {
+                reject(err);
+            }
+        });
+
+        readStream.on('error', (err) => {
+            reject(err);
+        });
+    });
 };
-
-
-
-
-
 
 module.exports = { excelToJson, processFile };

@@ -14,8 +14,7 @@ const connectDB = async () => {
         console.log('MongoDB connected');
 
         gfs = Grid(conn.connection.db, mongoose.mongo);
-        gfs.collection('uploads'); // Establece el nombre de la colección
-
+        gfs.collection('uploads');
     } catch (error) {
         console.error('Failed to connect to MongoDB:', error.message);
         process.exit(1);
