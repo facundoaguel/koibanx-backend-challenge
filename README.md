@@ -16,7 +16,7 @@ cd <PROJECT_FOLDER>
 
 # Construir e iniciar los contenedores con Docker Compose
 docker-compose build
-docker-compose up -d
+docker-compose up --no-attach db
 ```
 La API se ejecuta en un contenedor Docker en el puerto **5000** y expone este mismo puerto.
 ---
