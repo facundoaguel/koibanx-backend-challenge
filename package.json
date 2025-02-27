@@ -20,13 +20,14 @@
     "nodemon": "^3.1.9"
   },
   "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "nodemonConfig": {
     "legacyWatch": true
   },
   "resolutions": {
     "multer-gridfs-storage/mongodb": "^5.9.1"
-  }
+  },
+  "type": "module"
 }
