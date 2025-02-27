@@ -35,92 +35,43 @@ Todos los endpoints comienzan con `/files/` y requieren el uso del header **Auth
 - **Respuesta:**
   ```json
   {
-    "message": "File is being processed",
-    "taskId": "<ID_DE_TAREA>"
+    "fileId": "<ID_DEL_ARCHIVO>",
+    "status": "pending",
+    "message": "File <NOMBRE_DEL_ARCHIVO> is uploading.",
   }
   ```
 
 ---
-
-### **Obtener datos válidos de un archivo**
-
-**GET** `/files/data/:fileId?page={n}&limit={m}`
-
-- **Parámetros:**
-  - `fileId` - ID del archivo.
-  - `page` (opcional) - Número de página (por defecto: `1`).
-  - `limit` (opcional) - Cantidad de registros por página (por defecto: `10`).
-- **Encabezados:**
-  - `Authorization: <API_KEY>`
-- **Respuesta:**
-  ```json
-  {
-    "taskId": "<ID_DE_TAREA>",
-    "status": "done",
-    "totalData": 50,
-    "processedData": [
-      { "name": "Juan", "age": 30, "nums": [1, 2, 3, 4] },
-      { "name": "Ana", "age": 25, "nums": [5, 6, 7, 8] }
-    ],
-    "currentPage": 1,
-    "totalPages": 5
-  }
-  ```
-
----
-
-### **Obtener errores de un archivo**
-
-**GET** `/files/errors/:fileId?page={n}&limit={m}`
-
-- **Descripción:** Obtiene los errores detectados en el procesamiento de un archivo.
-- **Parámetros:**
-  - `fileId` - ID del archivo.
-  - `page` (opcional) - Número de página (por defecto: `1`).
-  - `limit` (opcional) - Cantidad de errores por página (por defecto: `10`).
-- **Encabezados:**
-  - `Authorization: <API_KEY>`
-- **Respuesta:**
-  ```json
-  {
-    "taskId": "<ID_DE_TAREA>",
-    "status": "done",
-    "totalErrors": 10,
-    "errors": [
-      { "row": 3, "col": 2 },
-      { "row": 7, "col": 1 }
-    ],
-    "currentPage": 1,
-    "totalPages": 1
-  }
-  ```
-
----
-
 ### **Obtener datos y errores de un archivo**
 
-**GET** `/files/:fileId?page={n}&limit={m}`
+**GET** `/files/:fileId?page={n}&perPage={m}`
 
 - **Parámetros:**
   - `fileId` - ID del archivo.
   - `page` (opcional) - Número de página (por defecto: `1`).
-  - `limit` (opcional) - Cantidad de registros por página (por defecto: `100`).
+  - `perPage` (opcional) - Cantidad de registros por página (por defecto: `100`).
 - **Encabezados:**
   - `Authorization: <API_KEY>`
 - **Respuesta:**
   ```json
   {
-    "taskId": "<ID_DE_TAREA>",
-    "status": "done",
+    "fileId": "<ID_DEL_ARCHIVO>",
+    "status": "<ESTADO_DEL_ARCHIVO>",
     "totalRows": 200,
-    "data": [
-      { "name": "Carlos", "age": 35, "nums": [1, 3, 5, 9], "row": 2 }
+    "validData": [
+      {
+        "nums": [1, 3, 5, 9],
+        "row": 2,
+        "name": "Carlos",
+        "age": 35, 
+      }
     ],
     "errors": [
-      { "row": 3, "col": "1" }
+      { 
+        "row": 3,
+        "col": 1
+      }
     ],
-    "currentPage": 1,
-    "totalPages": 2
   }
   ```
 
@@ -132,7 +83,8 @@ Todos los endpoints comienzan con `/files/` y requieren el uso del header **Auth
 1️⃣ **Construir e iniciar los contenedores con Docker Compose**:
 
 ```sh
-docker-compose up -d --build
+docker-compose build
+docker-compose up --no-attach db
 ```
 
 2️⃣ **Verificar que los servicios estén corriendo**:
